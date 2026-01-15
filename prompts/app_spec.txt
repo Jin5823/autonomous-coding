@@ -1,0 +1,295 @@
+<project_specification>
+  <project_name>URL Shortener - Simple URL Shortening Service</project_name>
+
+  <overview>
+    Build a simple and clean URL shortening service. Users can input a long URL
+    and receive a shortened URL that redirects to the original. The service also
+    provides basic click statistics (total clicks, last accessed time).
+
+    No authentication required - anyone can create shortened URLs anonymously.
+    The focus is on simplicity, speed, and reliability.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React with Vite</framework>
+      <styling>Tailwind CSS (via CDN)</styling>
+      <state_management>React hooks (useState, useEffect)</state_management>
+      <routing>React Router for navigation</routing>
+      <port>Frontend runs on port 5173</port>
+    </frontend>
+    <backend>
+      <runtime>Golang</runtime>
+      <framework>net/http (standard library) or gin</framework>
+      <port>Backend runs on port 8080</port>
+    </backend>
+    <storage>
+      <interface>Storage interface abstraction</interface>
+      <local>Local file system (for development)</local>
+      <production>S3-compatible storage (for production)</production>
+      <format>Each short URL = one JSON file</format>
+    </storage>
+  </technology_stack>
+
+  <core_features>
+    <url_shortening>
+      <description>Main feature - convert long URLs to short codes</description>
+      <flow>
+        1. User enters a long URL in the input field
+        2. Frontend sends POST request to /api/shorten
+        3. Backend generates a unique 6-character code
+        4. Backend saves URL data to storage
+        5. Frontend displays the shortened URL with copy button
+      </flow>
+      <code_generation>
+        - 6 characters: alphanumeric (a-z, A-Z, 0-9)
+        - Random generation with collision check
+        - Example: https://short.url/abc123
+      </code_generation>
+    </url_shortening>
+
+    <redirect>
+      <description>Redirect short URLs to original URLs</description>
+      <flow>
+        1. User visits /:code (e.g., /abc123)
+        2. Backend looks up the code in storage
+        3. Backend increments click count
+        4. Backend returns 302 redirect to original URL
+        5. If code not found, return 404 page
+      </flow>
+    </redirect>
+
+    <statistics>
+      <description>Basic click statistics for each shortened URL</description>
+      <data_tracked>
+        - Total click count
+        - Created timestamp
+        - Last accessed timestamp
+        - Original URL
+      </data_tracked>
+      <view>
+        - Stats page at /stats/:code
+        - Shows all tracked data in a clean UI
+      </view>
+    </statistics>
+
+    <recent_urls>
+      <description>Show recently created URLs on the main page</description>
+      <storage>LocalStorage in browser (last 10 URLs created in this browser)</storage>
+      <display>List with short URL, original URL (truncated), and link to stats</display>
+    </recent_urls>
+  </core_features>
+
+  <api_endpoints>
+    <endpoint>
+      <method>POST</method>
+      <path>/api/shorten</path>
+      <request>{ "url": "https://example.com/very/long/url" }</request>
+      <response>{ "code": "abc123", "short_url": "http://localhost:8080/abc123", "original_url": "https://example.com/very/long/url" }</response>
+      <errors>
+        - 400: Invalid URL format
+        - 500: Storage error
+      </errors>
+    </endpoint>
+
+    <endpoint>
+      <method>GET</method>
+      <path>/:code</path>
+      <response>302 Redirect to original URL</response>
+      <errors>
+        - 404: Code not found
+      </errors>
+    </endpoint>
+
+    <endpoint>
+      <method>GET</method>
+      <path>/api/stats/:code</path>
+      <response>{ "code": "abc123", "original_url": "https://...", "clicks": 42, "created_at": "2024-01-15T10:30:00Z", "last_accessed": "2024-01-15T15:45:00Z" }</response>
+      <errors>
+        - 404: Code not found
+      </errors>
+    </endpoint>
+  </api_endpoints>
+
+  <storage_design>
+    <interface>
+      Storage interface with two implementations:
+      - LocalStorage: saves JSON files to ./data/ directory
+      - S3Storage: saves to S3 bucket (future implementation)
+    </interface>
+
+    <file_structure>
+      data/
+        abc123.json
+        xyz789.json
+        ...
+    </file_structure>
+
+    <file_format>
+      {
+        "code": "abc123",
+        "original_url": "https://example.com/long/url",
+        "created_at": "2024-01-15T10:30:00Z",
+        "clicks": 42,
+        "last_accessed": "2024-01-15T15:45:00Z"
+      }
+    </file_format>
+
+    <golang_interface>
+      type URLData struct {
+        Code         string    `json:"code"`
+        OriginalURL  string    `json:"original_url"`
+        CreatedAt    time.Time `json:"created_at"`
+        Clicks       int       `json:"clicks"`
+        LastAccessed time.Time `json:"last_accessed,omitempty"`
+      }
+
+      type Storage interface {
+        Save(data URLData) error
+        Load(code string) (URLData, error)
+        IncrementClicks(code string) error
+        Exists(code string) bool
+      }
+    </golang_interface>
+  </storage_design>
+
+  <ui_layout>
+    <main_page path="/">
+      <header>
+        - Logo/Title: "URL Shortener"
+        - Simple tagline: "Shorten your links instantly"
+      </header>
+
+      <url_form>
+        - Large input field for URL
+        - "Shorten" button
+        - Loading state while processing
+      </url_form>
+
+      <result_display when="url_created">
+        - Show shortened URL prominently
+        - Copy button (with "Copied!" feedback)
+        - Link to stats page
+        - QR code (optional, nice-to-have)
+      </result_display>
+
+      <recent_urls>
+        - "Your Recent URLs" section
+        - List of last 10 URLs created (from localStorage)
+        - Each item shows: short code, original URL (truncated), clicks
+      </recent_urls>
+    </main_page>
+
+    <stats_page path="/stats/:code">
+      <header>
+        - Back to home link
+        - Title: "Link Statistics"
+      </header>
+
+      <stats_display>
+        - Short URL (with copy button)
+        - Original URL (full, clickable)
+        - Total clicks (large number)
+        - Created date/time
+        - Last accessed date/time
+      </stats_display>
+    </stats_page>
+
+    <not_found_page path="*">
+      - "404 - Link Not Found" message
+      - Link back to home page
+    </not_found_page>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      - Primary: Blue (#3B82F6)
+      - Background: Light gray (#F9FAFB)
+      - Text: Dark gray (#111827)
+      - Success: Green (#10B981)
+      - Error: Red (#EF4444)
+      - Border: Light gray (#E5E7EB)
+    </color_palette>
+
+    <typography>
+      - Font: System font stack (clean, fast loading)
+      - Headings: Bold, larger size
+      - Body: Regular weight
+      - Monospace for URLs/codes
+    </typography>
+
+    <components>
+      - Rounded corners (8px)
+      - Subtle shadows for cards
+      - Focus states for accessibility
+      - Responsive (mobile-friendly)
+    </components>
+  </design_system>
+
+  <implementation_steps>
+    <step number="1">
+      <title>Project Setup</title>
+      <tasks>
+        - Create Golang project structure
+        - Create React + Vite project
+        - Set up Tailwind CSS
+        - Create storage interface
+      </tasks>
+    </step>
+
+    <step number="2">
+      <title>Backend Core</title>
+      <tasks>
+        - Implement LocalStorage
+        - Implement POST /api/shorten endpoint
+        - Implement GET /:code redirect
+        - Implement GET /api/stats/:code
+        - Add CORS middleware
+      </tasks>
+    </step>
+
+    <step number="3">
+      <title>Frontend Core</title>
+      <tasks>
+        - Build main page with URL form
+        - Implement API calls
+        - Add result display with copy button
+        - Build stats page
+      </tasks>
+    </step>
+
+    <step number="4">
+      <title>Polish</title>
+      <tasks>
+        - Add recent URLs feature (localStorage)
+        - Error handling and validation
+        - Loading states
+        - 404 page
+        - Responsive design
+      </tasks>
+    </step>
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - Can shorten any valid URL
+      - Short URLs redirect correctly
+      - Click statistics are accurate
+      - Stats page displays correctly
+    </functionality>
+
+    <user_experience>
+      - Fast URL shortening (< 1 second)
+      - Easy copy-to-clipboard
+      - Clean, intuitive interface
+      - Works on mobile devices
+    </user_experience>
+
+    <technical_quality>
+      - No console errors
+      - Proper error handling
+      - Storage abstraction works correctly
+      - CORS configured properly
+    </technical_quality>
+  </success_criteria>
+</project_specification>

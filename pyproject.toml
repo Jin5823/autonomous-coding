@@ -1,0 +1,9 @@
+[project]
+name = "autonomous-coding"
+version = "0.1.0"
+dependencies = [
+    "claude-agent-sdk",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
