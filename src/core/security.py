@@ -60,6 +60,8 @@ ALLOWED_COMMANDS = {
     "[",
     "true",
     "false",
+    "source",  # For Python venv activation
+    ".",       # POSIX equivalent of source
     # Network (for dev dependencies)
     "curl",
     # Archives
@@ -69,6 +71,13 @@ ALLOWED_COMMANDS = {
     "npm",
     "npx",
     "node",
+    # Python development
+    "python",
+    "python3",
+    "pip",
+    "pip3",
+    # Go development
+    "go",
     # Version control
     "git",
     # Process management
