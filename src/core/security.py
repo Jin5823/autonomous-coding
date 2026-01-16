@@ -19,7 +19,7 @@ from claude_agent_sdk.types import (
 )
 
 # Allowed commands for development tasks
-# Minimal set needed for the autonomous coding
+# Safe set for autonomous coding (Sandbox provides OS-level isolation)
 ALLOWED_COMMANDS = {
     # File inspection
     "ls",
@@ -28,14 +28,46 @@ ALLOWED_COMMANDS = {
     "tail",
     "wc",
     "grep",
-    # File operations (agent uses SDK tools for most file ops, but cp/mkdir needed occasionally)
+    "find",
+    "diff",
+    # File operations
     "cp",
+    "mv",
+    "rm",
     "mkdir",
+    "touch",
     "chmod",  # For making scripts executable; validated separately
-    # Directory
+    # Text processing
+    "echo",
+    "sort",
+    "uniq",
+    "cut",
+    "tr",
+    "tee",
+    "xargs",
+    "seq",
+    # Path utilities
     "pwd",
+    "dirname",
+    "basename",
+    "which",
+    # Environment
+    "env",
+    "printenv",
+    "date",
+    # Shell utilities
+    "test",
+    "[",
+    "true",
+    "false",
+    # Network (for dev dependencies)
+    "curl",
+    # Archives
+    "tar",
+    "unzip",
     # Node.js development
     "npm",
+    "npx",
     "node",
     # Version control
     "git",
@@ -49,7 +81,19 @@ ALLOWED_COMMANDS = {
 }
 
 # Commands that need additional validation even when in the allowlist
-COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh"}
+COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm"}
+
+# Protected paths that should never be deleted
+PROTECTED_PATHS = {
+    ".git",
+    ".env",
+    ".env.local",
+    ".env.production",
+    "../",
+    "..",
+    "/",
+    "~",
+}
 
 
 async def bash_security_hook(
@@ -123,6 +167,10 @@ async def bash_security_hook(
                     return {"decision": "block", "reason": reason}
             elif cmd == "init.sh":
                 allowed, reason = _validate_init_script(cmd_segment)
+                if not allowed:
+                    return {"decision": "block", "reason": reason}
+            elif cmd == "rm":
+                allowed, reason = _validate_rm_command(cmd_segment)
                 if not allowed:
                     return {"decision": "block", "reason": reason}
 
@@ -371,3 +419,72 @@ def _validate_init_script(command_string: str) -> tuple[bool, str]:
         return True, ""
 
     return False, f"Only ./init.sh is allowed, got: {script}"
+
+
+def _validate_rm_command(command_string: str) -> tuple[bool, str]:
+    """
+    Validate rm commands - prevent dangerous deletions.
+
+    Rules:
+    - Block -rf or -fr flags (force recursive deletion)
+    - Block deletion of protected paths (.git, .env, .., /, ~)
+    - Allow single file deletion and safe directory removal
+
+    Returns:
+        Tuple of (is_allowed, reason_if_blocked)
+    """
+    try:
+        tokens = shlex.split(command_string)
+    except ValueError:
+        return False, "Could not parse rm command"
+
+    if not tokens or tokens[0] != "rm":
+        return False, "Not a rm command"
+
+    # Parse flags and files
+    flags = set()
+    files = []
+
+    for token in tokens[1:]:
+        if token.startswith("-") and not token.startswith("--"):
+            # Expand combined flags like -rf to individual flags
+            for char in token[1:]:
+                flags.add(char)
+        elif token.startswith("--"):
+            # Handle long flags
+            flag_name = token[2:].split("=")[0]
+            if flag_name in ("recursive", "force"):
+                flags.add(flag_name[0])  # 'r' or 'f'
+        else:
+            files.append(token)
+
+    # Block dangerous flag combinations: -rf, -fr (force + recursive)
+    if "r" in flags and "f" in flags:
+        return False, "rm -rf is not allowed (dangerous recursive force deletion)"
+
+    # Check each file against protected paths
+    for file_path in files:
+        # Normalize the path for checking
+        normalized = file_path.rstrip("/")
+        base_name = os.path.basename(normalized)
+
+        # Check if it's a protected path
+        if normalized in PROTECTED_PATHS or base_name in PROTECTED_PATHS:
+            return False, f"Cannot delete protected path: {file_path}"
+
+        # Block paths that traverse up
+        if ".." in file_path:
+            return False, f"Cannot delete paths with '..': {file_path}"
+
+        # Block absolute paths outside project (starting with /)
+        if file_path.startswith("/"):
+            return False, f"Cannot delete absolute paths: {file_path}"
+
+        # Block home directory references
+        if file_path.startswith("~"):
+            return False, f"Cannot delete home directory paths: {file_path}"
+
+    if not files:
+        return False, "rm requires at least one file"
+
+    return True, ""
