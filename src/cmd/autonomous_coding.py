@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Autonomous Coding Agent
 =======================
@@ -14,6 +13,7 @@ Example Usage:
 
 import argparse
 import asyncio
+import textwrap
 from pathlib import Path
 
 from core.agent import run_autonomous_agent
@@ -21,7 +21,39 @@ from core.agent import run_autonomous_agent
 
 def main() -> None:
     """Main entry point."""
-    args = _parse_args()
+    parser = argparse.ArgumentParser(
+        description="Autonomous Coding Agent - Long-running coding harness with Claude",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent(
+            """\
+            Examples:
+              # Start fresh project
+              python autonomous_coding.py --project-dir ./generations/my_project --prompts-dir ./prompts
+
+              # Limit iterations
+              python autonomous_coding.py --project-dir ./generations/my_project --prompts-dir ./prompts --max-iterations 5
+        """
+        ),
+    )
+    parser.add_argument(
+        "--project-dir",
+        type=Path,
+        required=True,
+        help="Directory where the project will be generated",
+    )
+    parser.add_argument(
+        "--prompts-dir",
+        type=Path,
+        required=True,
+        help="Directory containing prompt templates (app_spec.txt, initializer_prompt.md, coding_prompt.md)",
+    )
+    parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=None,
+        help="Maximum number of agent iterations (default: unlimited)",
+    )
+    args = parser.parse_args()
 
     print("Note: using Claude Code subscription authentication")
     print("(Make sure you're logged in via 'claude' CLI)\n")
@@ -29,7 +61,6 @@ def main() -> None:
     project_dir = args.project_dir.resolve()
     prompts_dir = args.prompts_dir.resolve()
 
-    # Run the agent
     try:
         asyncio.run(
             run_autonomous_agent(
@@ -44,45 +75,6 @@ def main() -> None:
     except Exception as e:
         print(f"\nFatal error: {e}")
         raise
-
-
-def _parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Autonomous Coding Agent - Long-running coding harness with Claude",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Start fresh project
-  python autonomous_coding.py --project-dir ./generations/my_project --prompts-dir ./prompts
-
-  # Limit iterations
-  python autonomous_coding.py --project-dir ./generations/my_project --prompts-dir ./prompts --max-iterations 5
-        """,
-    )
-
-    parser.add_argument(
-        "--project-dir",
-        type=Path,
-        required=True,
-        help="Directory where the project will be generated",
-    )
-
-    parser.add_argument(
-        "--prompts-dir",
-        type=Path,
-        required=True,
-        help="Directory containing prompt templates (app_spec.txt, initializer_prompt.md, coding_prompt.md)",
-    )
-
-    parser.add_argument(
-        "--max-iterations",
-        type=int,
-        default=None,
-        help="Maximum number of agent iterations (default: unlimited)",
-    )
-
-    return parser.parse_args()
 
 
 if __name__ == "__main__":
