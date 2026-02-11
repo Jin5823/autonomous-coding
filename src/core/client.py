@@ -32,6 +32,8 @@ BUILTIN_TOOLS = [
     "Glob",
     "Grep",
     "Bash",
+    "WebFetch",
+    "WebSearch",
 ]
 
 
@@ -61,15 +63,18 @@ def create_client(project_dir: Path) -> ClaudeSDKClient:
             "defaultMode": "acceptEdits",  # Auto-approve edits within allowed directories
             "allow": [
                 # Allow all file operations within the project directory
-                "Read(./**)",
+                "Read(*)",
                 "Write(./**)",
                 "Edit(./**)",
-                "Glob(./**)",
-                "Grep(./**)",
+                "Glob(*)",
+                "Grep(*)",
                 # Bash permission granted here, but actual commands are validated
                 # by the bash_security_hook (see security.py for allowed commands)
                 "Bash(*)",
-                # Allow Puppeteer MCP tools for browser automation
+                # Web tools for documentation and search
+                "WebFetch(*)",
+                "WebSearch(*)",
+                # Allow MCP tools
                 *PUPPETEER_TOOLS,
             ],
         },
@@ -78,17 +83,18 @@ def create_client(project_dir: Path) -> ClaudeSDKClient:
     # Ensure project directory exists before creating settings file
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write settings to a file in the project directory
+    # Write settings to a file in the project directory (only if it doesn't exist)
     settings_file = project_dir / ".claude_settings.json"
-    with open(settings_file, "w") as f:
-        json.dump(security_settings, f, indent=2)
+    if not settings_file.exists():
+        with open(settings_file, "w") as f:
+            json.dump(security_settings, f, indent=2)
 
-    print(f"Created security settings at {settings_file}")
-    print("   - Sandbox enabled (OS-level bash isolation)")
-    print(f"   - Filesystem restricted to: {project_dir.resolve()}")
-    print("   - Bash commands restricted to allowlist (see security.py)")
-    print("   - MCP servers: puppeteer (browser automation)")
-    print()
+        print(f"Created security settings at {settings_file}")
+        print("   - Sandbox enabled (OS-level bash isolation)")
+        print(f"   - Filesystem restricted to: {project_dir.resolve()}")
+        print("   - Bash commands restricted to allowlist (see security.py)")
+        print("   - MCP servers: puppeteer (browser automation)")
+        print()
 
     return ClaudeSDKClient(
         options=ClaudeAgentOptions(
@@ -97,7 +103,9 @@ def create_client(project_dir: Path) -> ClaudeSDKClient:
                 *BUILTIN_TOOLS,
                 *PUPPETEER_TOOLS,
             ],
-            mcp_servers={"puppeteer": {"command": "npx", "args": ["puppeteer-mcp-server"]}},
+            mcp_servers={
+                "puppeteer": {"command": "npx", "args": ["puppeteer-mcp-server"]},
+            },
             hooks={
                 "PreToolUse": [
                     HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
